@@ -1,3 +1,18 @@
 name = "registro-vehiculos"
-compatibility_date = "2024-11-01"
-pages_build_output_dir = "dist"
+main = "worker/index.js"
+compatibility_date = "2025-06-01"
+
+# Static Assets: la SPA compilada por Vite se sirve desde ./dist.
+# not_found_handling = "single-page-application" hace que cualquier ruta que no
+# sea un archivo devuelva index.html (200), necesario para el ruteo de React.
+[assets]
+directory = "./dist"
+binding = "ASSETS"
+not_found_handling = "single-page-application"
+
+# --- Sincronización entre dispositivos (opcional, para más adelante) ---------
+# Descomenta y crea la base con: npx wrangler d1 create registro-vehiculos
+# [[d1_databases]]
+# binding = "DB"
+# database_name = "registro-vehiculos"
+# database_id = "<pega-aqui-el-id>"

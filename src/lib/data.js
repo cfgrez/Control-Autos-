@@ -7,6 +7,7 @@ export const STORAGE_KEY_LEGACY = "registro_vehiculos_chile_netlify_v1";
 
 export const categoriasGasto = [
   "Bencina",
+  "Diésel",
   "Electricidad",
   "TAG",
   "Mantención",
@@ -22,6 +23,7 @@ export const categoriasGasto = [
 // Color por categoría para gráficos y badges.
 export const colorCategoria = {
   Bencina: "#f5a524",
+  Diésel: "#a16207",
   Electricidad: "#06b6d4",
   TAG: "#8b5cf6",
   Mantención: "#3b82f6",
@@ -34,7 +36,10 @@ export const colorCategoria = {
   Otros: "#94a3b8",
 };
 
-export const categoriasCombustible = ["Bencina", "Electricidad"];
+// Energéticos: cubren toda la flota. Un híbrido enchufable usa bencina y
+// electricidad; un diésel solo diésel; un eléctrico solo electricidad. Al sumar
+// las tres, el costo por km funciona para cualquier tipo de motorización.
+export const categoriasEnergia = ["Bencina", "Diésel", "Electricidad"];
 
 export const tiposDocumento = [
   "Póliza de seguro",

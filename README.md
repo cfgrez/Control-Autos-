@@ -3,7 +3,7 @@
 Aplicación web (React + Vite) para llevar el control de tus vehículos: gastos,
 documentos, kilometraje y vencimientos. Pensada para Chile (CLP, patentes, SOAP,
 revisión técnica, permiso de circulación, TAG) y lista para desplegar en
-**Cloudflare Pages**.
+**Cloudflare Workers**.
 
 Los datos se guardan en el navegador con `localStorage`: funciona sin conexión y
 sin servidor. Puedes exportar/importar un respaldo en JSON cuando quieras.
@@ -34,34 +34,49 @@ npm run build    # genera dist/
 npm run preview  # sirve dist/ localmente
 ```
 
-## Desplegar en Cloudflare Pages
+## Desplegar en Cloudflare Workers
 
-### Opción A — Conectar el repositorio de GitHub (recomendada)
+Esta versión corre como **Worker** usando *Static Assets*: la SPA compilada se
+sirve desde `./dist` mediante el binding `ASSETS`, y el archivo `worker/index.js`
+maneja el ruteo. El fallback de SPA (`not_found_handling = "single-page-application"`
+en `wrangler.toml`) hace que rutas como `/vehiculos` devuelvan `index.html`.
 
-1. Sube este proyecto a un repositorio de GitHub.
-2. En el panel de Cloudflare ve a **Workers & Pages → Create → Pages → Connect to Git**.
-3. Selecciona el repositorio y usa esta configuración de build:
-   - **Framework preset:** `Vite` (o `None`).
-   - **Build command:** `npm run build`
-   - **Build output directory:** `dist`
-   - **Variable de entorno** (opcional, si el build falla por la versión de Node):
-     `NODE_VERSION = 20`
-4. **Save and Deploy.** Cada push a la rama principal vuelve a desplegar solo.
+> **Importante:** crea el proyecto como **Worker**, no como Pages. El error que
+> tuviste antes (`you've run a Workers-specific command in a Pages project`)
+> ocurría porque el proyecto estaba creado como Pages pero se ejecutaba
+> `wrangler deploy`. Ahora ese comando es el correcto.
 
-El archivo `public/_redirects` ya incluye el fallback de SPA
-(`/* /index.html 200`) para que las rutas funcionen, y `public/_headers` agrega
-cache de assets y cabeceras de seguridad.
+### Opción A — Desde la consola (rápida)
 
-### Opción B — Desde la línea de comandos con Wrangler
+No necesitas instalar Wrangler; `npx` baja la última versión.
 
 ```bash
 npm install
-npm run build
-npx wrangler pages deploy dist --project-name=registro-vehiculos
+npm run deploy        # hace build y luego: npx wrangler@latest deploy
 ```
 
-La primera vez Wrangler te pedirá iniciar sesión en Cloudflare y crear el
-proyecto. También puedes usar el atajo `npm run deploy`.
+La primera vez te pedirá iniciar sesión en Cloudflare y crear el Worker.
+
+### Opción B — Conectar el repositorio de GitHub (Workers Builds)
+
+1. Sube el proyecto a un repositorio de GitHub.
+2. En Cloudflare ve a **Workers & Pages → Create → Workers → Import a repository**
+   (o **Connect to Git**).
+3. Configuración de build:
+   - **Build command:** `npm run build`
+   - **Deploy command:** `npx wrangler deploy` *(es el valor por defecto)*
+   - **Variable de entorno** (opcional, si falla por Node): `NODE_VERSION = 20`
+4. **Save and Deploy.** Cada push a la rama principal vuelve a desplegar solo.
+
+### Probar el Worker en local
+
+```bash
+npm run cf-dev       # build + wrangler dev en http://localhost:8787
+```
+
+Sirve la app igual que en producción, incluido el endpoint de ejemplo
+`GET /api/health`. Para el desarrollo del frontend con recarga en caliente sigue
+usando `npm run dev` (Vite, en http://localhost:5173).
 
 ## Migración desde la versión de Netlify
 
@@ -73,24 +88,29 @@ versión vieja e impórtalo en la nueva.
 
 ## Siguiente paso: sincronizar entre dispositivos (opcional)
 
-Hoy cada navegador guarda sus propios datos. Para compartirlos entre el celular
-y el computador puedes agregar una **Cloudflare Pages Function** con base de
-datos **D1** (SQL) o **KV** (clave-valor):
+Hoy cada navegador guarda sus propios datos con `localStorage`. Como ya corres
+sobre un Worker, agregar sincronización es directo:
 
-1. Crea una carpeta `functions/api/` con endpoints (p. ej. `data.js`) que lean y
-   escriban en D1/KV.
-2. Declara el binding en `wrangler.toml` (`[[d1_databases]]` o `[[kv_namespaces]]`).
-3. Reemplaza las llamadas a `localStorage` en `src/App.jsx` por `fetch` a
-   `/api/data`.
+1. En `worker/index.js` ya hay un router para `/api/*` (con un `/api/health` de
+   ejemplo). Agrega ahí endpoints para leer y escribir datos.
+2. Crea una base **D1** y declara el binding en `wrangler.toml` (la sección
+   `[[d1_databases]]` está comentada y lista para usar):
+   ```bash
+   npx wrangler d1 create registro-vehiculos
+   ```
+3. En `src/App.jsx`, reemplaza las llamadas a `localStorage` por `fetch` a
+   `/api/...`.
 
 Mientras tanto, el respaldo JSON cumple esa función de forma manual.
 
 ## Estructura
 
 ```
+worker/
+  index.js          # Worker: sirve la SPA (ASSETS) y deja lista una API /api/*
+wrangler.toml       # configuración del Worker + Static Assets (fallback SPA)
 public/
-  _redirects        # fallback SPA para Cloudflare Pages
-  _headers          # cache + cabeceras de seguridad
+  _headers          # cache de assets + cabeceras de seguridad
   favicon.svg
 src/
   lib/data.js       # constantes, formato CLP, fechas, validaciones
@@ -99,5 +119,14 @@ src/
     Dashboard.jsx   # dashboard con gráficos (recharts)
   App.jsx           # estado y vistas
   index.css         # sistema de diseño
-wrangler.toml       # configuración de Cloudflare Pages
 ```
+
+## Notas sobre el costo por km
+
+El indicador suma los energéticos del periodo (**bencina + diésel + electricidad**)
+y los divide por el recorrido tomado de los kilometrajes registrados en los gastos.
+Así funciona para cualquier motorización: un híbrido enchufable promedia bencina y
+electricidad, un diésel usa solo diésel, y un 100% eléctrico solo electricidad. Para
+que el cálculo sea fiable, registra el **kilometraje** al cargar bencina/diésel o al
+cargar energía, y selecciona un vehículo (no aplica a "Todos", porque mezclaría
+odómetros distintos).

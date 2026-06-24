@@ -22,7 +22,7 @@ import {
   claveMes,
   fechaDesde,
   colorCategoria,
-  categoriasCombustible,
+  categoriasEnergia,
   rangos,
 } from "../lib/data.js";
 
@@ -164,8 +164,10 @@ export default function Dashboard({
       .sort((a, b) => b.total - a.total);
   }, [gastosRango, vehiculos, vehiculoSeleccionado]);
 
-  // Costo por km estimado (combustible / recorrido). Solo tiene sentido para
-  // un vehículo concreto: mezclar odómetros de varios autos da un recorrido falso.
+  // Costo por km estimado (energía / recorrido). Solo tiene sentido para un
+  // vehículo concreto: mezclar odómetros de varios autos da un recorrido falso.
+  // Suma bencina + diésel + electricidad, así cubre gasolina, diésel, híbrido,
+  // híbrido enchufable y 100% eléctrico sin configuración extra.
   const costoPorKm = useMemo(() => {
     if (!vehiculoSeleccionado) return { motivo: "scope" };
     const lecturas = gastosRango
@@ -174,11 +176,16 @@ export default function Dashboard({
     if (lecturas.length < 2) return { motivo: "datos" };
     const recorrido = Math.max(...lecturas) - Math.min(...lecturas);
     if (recorrido <= 0) return { motivo: "datos" };
-    const gastoCombustible = gastosRango
-      .filter((g) => categoriasCombustible.includes(g.categoria))
-      .reduce((s, g) => s + Number(g.monto || 0), 0);
-    if (gastoCombustible <= 0) return { motivo: "datos" };
-    return { valor: gastoCombustible / recorrido, recorrido };
+
+    const energeticos = gastosRango.filter((g) => categoriasEnergia.includes(g.categoria));
+    const gastoEnergia = energeticos.reduce((s, g) => s + Number(g.monto || 0), 0);
+    if (gastoEnergia <= 0) return { motivo: "datos" };
+
+    // Mix de energéticos presente (ej. "bencina + electricidad" en un PHEV).
+    const tipos = categoriasEnergia.filter((cat) =>
+      energeticos.some((g) => g.categoria === cat && Number(g.monto) > 0)
+    );
+    return { valor: gastoEnergia / recorrido, recorrido, tipos };
   }, [gastosRango, vehiculoSeleccionado]);
 
   const etiquetaRango = rangos.find((r) => r.id === rango)?.label ?? "";
@@ -233,10 +240,10 @@ export default function Dashboard({
             <strong>{costoPorKm.valor ? `${dinero(costoPorKm.valor)}/km` : "—"}</strong>
             <small>
               {costoPorKm.valor
-                ? `combustible · ${costoPorKm.recorrido.toLocaleString("es-CL")} km`
+                ? `${costoPorKm.tipos.map((t) => t.toLowerCase()).join(" + ")} · ${costoPorKm.recorrido.toLocaleString("es-CL")} km`
                 : costoPorKm.motivo === "scope"
                 ? "elige un vehículo"
-                : "registra el km en los gastos"}
+                : "registra energía y km en los gastos"}
             </small>
           </Card>
           <Card className="kpi">
