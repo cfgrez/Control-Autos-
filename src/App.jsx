@@ -34,6 +34,7 @@ export default function App() {
   const [gastoForm, setGastoForm] = useState(gastoVacio);
   const [documentoForm, setDocumentoForm] = useState(documentoVacio);
   const [editandoVehiculoId, setEditandoVehiculoId] = useState(null);
+  const [editandoGastoId, setEditandoGastoId] = useState(null);
 
   // Carga inicial (con migración del formato antiguo).
   useEffect(() => {
@@ -142,6 +143,7 @@ export default function App() {
       vehiculoId: vehiculoFiltro === "todos" ? "" : vehiculoFiltro,
     });
     setEditandoVehiculoId(null);
+    setEditandoGastoId(null);
   }
 
   function guardarVehiculo(e) {
@@ -178,6 +180,19 @@ export default function App() {
   function guardarGasto(e) {
     e.preventDefault();
     if (!gastoForm.vehiculoId || !gastoForm.monto) return;
+    if (editandoGastoId) {
+      setGastos((prev) =>
+        prev.map((g) => (g.id === editandoGastoId ? { ...gastoForm, id: editandoGastoId } : g))
+      );
+      setEditandoGastoId(null);
+      setGastoForm({
+        ...gastoVacio,
+        vehiculoId: gastoForm.vehiculoId,
+        categoria: gastoForm.categoria,
+        fecha: new Date().toISOString().slice(0, 10),
+      });
+      return;
+    }
     setGastos((prev) => [{ ...gastoForm, id: crearId() }, ...prev]);
     setGastoForm({
       ...gastoVacio,
@@ -187,7 +202,24 @@ export default function App() {
     });
   }
 
+  function editarGasto(g) {
+    setGastoForm(g);
+    setEditandoGastoId(g.id);
+    setTab("gastos");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function cancelarEdicionGasto() {
+    setEditandoGastoId(null);
+    setGastoForm({
+      ...gastoVacio,
+      vehiculoId: vehiculoFiltro === "todos" ? "" : vehiculoFiltro,
+      fecha: new Date().toISOString().slice(0, 10),
+    });
+  }
+
   function eliminarGasto(id) {
+    if (editandoGastoId === id) cancelarEdicionGasto();
     setGastos((prev) => prev.filter((g) => g.id !== id));
   }
 
@@ -441,6 +473,10 @@ export default function App() {
               </div>
 
               <Card>
+                <div className="card-head">
+                  <h3>{editandoGastoId ? "Editar gasto" : "Registrar gasto"}</h3>
+                  {editandoGastoId && <span className="edit-flag">Editando</span>}
+                </div>
                 <form className="form-grid" onSubmit={guardarGasto}>
                   <Campo label="Vehículo">
                     <select required value={gastoForm.vehiculoId} onChange={(e) => setGastoForm({ ...gastoForm, vehiculoId: e.target.value })}>
@@ -458,7 +494,10 @@ export default function App() {
                   <Campo label="Kilometraje" hint="Mejora el costo por km"><input type="number" value={gastoForm.kilometraje} onChange={(e) => setGastoForm({ ...gastoForm, kilometraje: e.target.value })} /></Campo>
                   <Campo label="Proveedor"><input value={gastoForm.proveedor} onChange={(e) => setGastoForm({ ...gastoForm, proveedor: e.target.value })} placeholder="Copec, Enel X, autopista…" /></Campo>
                   <Campo label="Notas"><input value={gastoForm.notas} onChange={(e) => setGastoForm({ ...gastoForm, notas: e.target.value })} /></Campo>
-                  <div className="form-actions"><button className="btn btn-primary" type="submit">Agregar gasto</button></div>
+                  <div className="form-actions">
+                    <button className="btn btn-primary" type="submit">{editandoGastoId ? "Guardar cambios" : "Agregar gasto"}</button>
+                    {editandoGastoId && <button type="button" className="btn" onClick={cancelarEdicionGasto}>Cancelar</button>}
+                  </div>
                 </form>
               </Card>
 
@@ -485,7 +524,7 @@ export default function App() {
                         {gastosTabla.map((g) => {
                           const v = vehiculos.find((x) => x.id === g.vehiculoId);
                           return (
-                            <tr key={g.id}>
+                            <tr key={g.id} className={editandoGastoId === g.id ? "row-editing" : ""}>
                               <td>{fechaCL(g.fecha)}</td>
                               <td>{v ? v.patente : "—"}</td>
                               <td><Badge>{g.categoria}</Badge></td>
@@ -493,7 +532,12 @@ export default function App() {
                               <td>{g.kilometraje ? `${numero(g.kilometraje)} km` : "—"}</td>
                               <td>{g.proveedor || "—"}</td>
                               <td>{g.notas || "—"}</td>
-                              <td><button className="btn btn-small btn-danger" onClick={() => eliminarGasto(g.id)}>Eliminar</button></td>
+                              <td>
+                                <div className="row-actions">
+                                  <button className="btn btn-small" onClick={() => editarGasto(g)}>Editar</button>
+                                  <button className="btn btn-small btn-danger" onClick={() => eliminarGasto(g.id)}>Eliminar</button>
+                                </div>
+                              </td>
                             </tr>
                           );
                         })}
